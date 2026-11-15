@@ -11,6 +11,7 @@ import { checkRecommendedExtensions } from './recommendations';
 import { registerEventHandlers } from './registration/register-event-handlers';
 import { registerProviders } from './registration/register-providers';
 import { disposeLogger } from './logging';
+import { BlockPreviewController } from './block-previews/controller';
 
 /**
  * Public API exposed via `vscode.extensions.getExtension(id).exports`.
@@ -19,6 +20,7 @@ import { disposeLogger } from './logging';
  * parse cache and decorator without monkey-patching or modifying the source.
  */
 export type ExtensionApi = {
+  blockPreviews: BlockPreviewController;
   /** The live parse cache; call `.get(document)` to read decoration ranges. */
   parseCache: MarkdownParseCache;
   /** The live decorator instance; exposes isEnabled(), activeEditor, etc. */
@@ -35,6 +37,7 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
   const parser = new MarkdownParser();
   const parseCache = new MarkdownParseCache(parser);
   const decorator = new Decorator(parseCache, context.workspaceState);
+  const blockPreviews = new BlockPreviewController(parseCache, decorator);
   decorator.updateDiffViewDecorationSetting(!config.diffView.applyDecorations());
   decorator.setActiveEditor(vscode.window.activeTextEditor);
 
@@ -50,6 +53,7 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
   ];
 
   context.subscriptions.push(
+    blockPreviews,
     ...providerDisposables,
     ...eventDisposables,
     ...commandDisposables,
@@ -57,7 +61,7 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
     { dispose: () => disposeLogger() },
   );
 
-  return { parseCache, decorator, svgProcessor: { processSvg } };
+  return { parseCache, decorator, blockPreviews, svgProcessor: { processSvg } };
 }
 
 export function deactivate(): void {

@@ -72,6 +72,16 @@ export class Decorator {
   private lastToggleCol = -1;
 
   private parseCache: MarkdownParseCache;
+  private readonly blockPreviewTables = new Map<string, readonly ScopeRange[]>();
+
+  /** Let the experimental block renderer own table source while its inset is visible. */
+  setBlockPreviewTables(uri: string, ranges: readonly ScopeRange[]): void {
+    const previous = this.blockPreviewTables.get(uri) ?? [];
+    if (previous.length === ranges.length && previous.every((r, i) => r.startPos === ranges[i].startPos && r.endPos === ranges[i].endPos)) return;
+    if (ranges.length) this.blockPreviewTables.set(uri, ranges);
+    else this.blockPreviewTables.delete(uri);
+    if (this.activeEditor?.document.uri.toString() === uri) this.updateDecorationsForSelection();
+  }
 
   /** Whether to skip decorations in diff views (inverse of applyDecorations setting) */
   private skipDecorationsInDiffView = true;
@@ -482,7 +492,9 @@ export class Decorator {
     const entry = this.parseCache.get(document);
     const scopeEntries = this.buildScopeEntries(entry.scopes, entry.text);
     return {
-      decorations: entry.decorations,
+      decorations: entry.decorations.filter(decoration => !(this.blockPreviewTables.get(document.uri.toString()) ?? []).some(
+        table => decoration.startPos >= table.startPos && decoration.endPos <= table.endPos
+      )),
       scopes: scopeEntries,
       text: entry.text,
       mermaidBlocks: entry.mermaidBlocks,

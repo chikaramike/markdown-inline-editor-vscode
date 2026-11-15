@@ -43,8 +43,14 @@
     "onLanguage:rmarkdown"
   ],
   "main": "./dist/extension.js",
+  "enabledApiProposals": ["editorInsets"],
   "contributes": {
     "commands": [
+      {
+        "command": "mdInline.toggleBlockPreviews",
+        "title": "Markdown Inline Editor: Toggle Experimental Image and Table Blocks",
+        "icon": "$(preview)"
+      },
       {
         "command": "mdInline.toggleDecorations",
         "title": "Toggle Markdown Decorations",
@@ -53,6 +59,11 @@
     ],
     "menus": {
       "editor/title": [
+        {
+          "command": "mdInline.toggleBlockPreviews",
+          "when": "editorLangId == markdown",
+          "group": "navigation"
+        },
         {
           "command": "mdInline.toggleDecorations",
           "when": "editorLangId == markdown || editorLangId == md || editorLangId == mdx || editorLangId == markdoc || editorLangId == mdc || editorLangId == juliamarkdown || editorLangId == rmarkdown",
@@ -82,6 +93,18 @@
     "configuration": {
       "title": "Markdown Inline Editor",
       "properties": {
+        "markdownInlineEditor.experimental.autoEnable": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically show experimental image and table blocks in Markdown files. Requires VS Code to be started with the editorInsets API enabled for this extension. The preview button can still disable them for a file during the current session."
+        },
+        "markdownInlineEditor.experimental.blockWidth": {
+          "type": "number",
+          "default": 560,
+          "minimum": 240,
+          "maximum": 1600,
+          "description": "Width in pixels of experimental image and table blocks. The proposed inset API does not expose the visible editor width; reduce this for narrow editor panes."
+        },
         "markdownInlineEditor.defaultBehaviors.diffView.applyDecorations": {
           "type": "boolean",
           "default": false,
