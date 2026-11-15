@@ -15,7 +15,7 @@ body{font: ${fontSize}px/1.55 ${escapeHtml(fontFamily)};}#block{width:${blockWid
 header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;color:var(--vscode-descriptionForeground);font:12px var(--vscode-font-family)}nav{display:flex;gap:4px;flex-shrink:0}
 button{font:inherit;cursor:pointer;color:var(--vscode-button-secondaryForeground);background:var(--vscode-button-secondaryBackground);border:1px solid var(--vscode-contrastBorder,transparent);padding:4px 10px;border-radius:3px}
 button:focus-visible,.table-scroll:focus-visible{outline:1px solid var(--vscode-focusBorder);outline-offset:2px}
-figure{margin:0}img{display:block;max-width:100%;max-height:calc(100vh - 104px);width:auto;height:auto;object-fit:contain;margin:0 auto}
+figure{margin:0}img{display:block;max-width:100%;max-height:calc(100vh - 104px);width:auto;height:auto;object-fit:contain;margin:0 auto}img.fill{width:100%}
 figcaption{font:12px/1.5 var(--vscode-font-family);color:var(--vscode-descriptionForeground);padding-top:8px}.error{color:var(--vscode-errorForeground)}
 .table-scroll{overflow:auto;width:100%;max-height:calc(100vh - 64px)}table{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;font:13px/1.55 var(--vscode-font-family)}
 .align-left{text-align:left}.align-center{text-align:center}.align-right{text-align:right}

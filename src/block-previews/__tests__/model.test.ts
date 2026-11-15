@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MarkdownParser } from '../../parser';
-import { extractPreviewBlocks, measuredInsetLines, renderTable } from '../model';
+import { extractPreviewBlocks, imageDimensions, imageInsetLines, measuredInsetLines, renderTable, DEFAULT_IMAGE_LINES } from '../model';
 import { renderBlockHtml } from '../html';
 
 function blocks(text: string) {
@@ -77,5 +77,27 @@ describe('block preview content', () => {
     expect(html).toContain('overflow-wrap:anywhere');
     expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
     expect(html).not.toContain('<script>alert(1)</script>');
+  });
+
+  it('reads image dimensions from SVG, PNG, GIF, and JPEG headers', () => {
+    const enc = (t: string) => new TextEncoder().encode(t);
+    expect(imageDimensions(enc('<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 390" width="680">'), 'image/svg+xml')).toEqual({ width: 680, height: 390 });
+    expect(imageDimensions(enc('<svg width="300px" height="150">'), 'image/svg+xml')).toEqual({ width: 300, height: 150 });
+    expect(imageDimensions(enc('<svg width="100%">'), 'image/svg+xml')).toBeUndefined();
+    const png = new Uint8Array(24); png.set([0, 0, 2, 128], 16); png.set([0, 0, 1, 44], 20);
+    expect(imageDimensions(png, 'image/png')).toEqual({ width: 640, height: 300 });
+    expect(imageDimensions(new Uint8Array([71, 73, 70, 56, 57, 97, 64, 1, 200, 0]), 'image/gif')).toEqual({ width: 320, height: 200 });
+    const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 4, 0, 0, 0xff, 0xc0, 0, 17, 8, 1, 0x2c, 2, 0x80, 0, 0, 0]);
+    expect(imageDimensions(jpeg, 'image/jpeg')).toEqual({ width: 640, height: 300 });
+    expect(imageDimensions(new Uint8Array(4), 'image/webp')).toBeUndefined();
+  });
+
+  it('reserves inset lines from aspect ratio at the configured block width', () => {
+    // SVG fills 900 - 26 = 874px; height = 874 * 390/680 = 501.3px; + 104 chrome = 605.3 / 21 -> 29 + 1.
+    expect(imageInsetLines({ width: 680, height: 390 }, 900, 21, true)).toBe(30);
+    // Raster images are capped at natural width (400px -> 200px tall).
+    expect(imageInsetLines({ width: 400, height: 200 }, 900, 21, false)).toBe(Math.ceil(304 / 21) + 1);
+    expect(imageInsetLines(undefined, 900, 21, true)).toBe(DEFAULT_IMAGE_LINES);
+    expect(imageInsetLines({ width: 100, height: 5000 }, 900, 21, true)).toBe(60);
   });
 });

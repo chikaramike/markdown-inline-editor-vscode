@@ -6,7 +6,7 @@ import { isSupportedMarkdownLanguage, FILE_BACKED_MARKDOWN_SELECTOR } from '../l
 import { resolveImageTarget } from '../link-targets';
 import type { MarkdownParseCache, ParseEntry } from '../markdown-parse-cache';
 import { renderBlockHtml } from './html';
-import { escapeHtml, extractPreviewBlocks, measuredInsetLines, renderTable, type PreviewBlock } from './model';
+import { escapeHtml, extractPreviewBlocks, imageDimensions, imageInsetLines, measuredInsetLines, renderTable, type ImageSize, type PreviewBlock } from './model';
 
 type Preview = {
   block: PreviewBlock;
@@ -177,9 +177,12 @@ export class BlockPreviewController implements vscode.Disposable {
       if (existing && existing.version === version) continue;
       existing?.inset.dispose();
       try {
-        const content = await this.content(block, editor.document);
+        const { html: content, size, scalable } = await this.content(block, editor.document);
         if (generation !== this.generation || version !== editor.document.version || editor !== this.editor) return;
-        const height = block.kind === 'image' ? 18 : Math.min(28, 5 + block.table.children.length * 3);
+        const blockWidth = vscode.workspace.getConfiguration('markdownInlineEditor', editor.document).get<number>('experimental.blockWidth', 560);
+        const height = block.kind === 'image'
+          ? imageInsetLines(size, blockWidth, this.lineHeight(editor.document), scalable)
+          : Math.min(28, 5 + block.table.children.length * 3);
         const inset = vscode.window.createWebviewTextEditorInset(editor, block.startLine, height, {
           enableScripts: true,
           localResourceRoots: this.resourceRoots(editor.document),
@@ -195,7 +198,7 @@ export class BlockPreviewController implements vscode.Disposable {
           nonce: randomBytes(16).toString('hex'), cspSource: inset.webview.cspSource,
           fontFamily: editorConfig.get<string>('fontFamily', 'monospace'),
           fontSize: editorConfig.get<number>('fontSize', 14),
-          blockWidth: vscode.workspace.getConfiguration('markdownInlineEditor', editor.document).get<number>('experimental.blockWidth', 560),
+          blockWidth,
         });
       } catch (error) {
         this.enabledUris.delete(editor.document.uri.toString());
@@ -227,11 +230,7 @@ export class BlockPreviewController implements vscode.Disposable {
     if (value.type === 'edit') {
       void this.editSource(preview);
     } else if (value.type === 'size') {
-      const config = vscode.workspace.getConfiguration('editor', this.editor.document);
-      const size = config.get<number>('fontSize', 14);
-      const configured = config.get<number>('lineHeight', 0);
-      const lineHeight = configured === 0 ? Math.round(size * 1.5) : configured < 8 ? Math.round(configured * size) : configured;
-      const height = measuredInsetLines(value.pixels, lineHeight);
+      const height = measuredInsetLines(value.pixels, this.lineHeight(this.editor.document));
       if (height === undefined) return;
       // Inset height is immutable in this proposed API. Keep the reserved frame
       // stable and scroll content within it; recreating insets leaks webviews in
@@ -259,23 +258,33 @@ export class BlockPreviewController implements vscode.Disposable {
     return [vscode.Uri.joinPath(document.uri, '..'), ...(vscode.workspace.workspaceFolders?.map(f => f.uri) ?? [])];
   }
 
-  private async content(block: PreviewBlock, document: vscode.TextDocument): Promise<string> {
-    if (block.kind === 'table') return renderTable(block.table);
+  private lineHeight(document: vscode.TextDocument): number {
+    const config = vscode.workspace.getConfiguration('editor', document);
+    const size = config.get<number>('fontSize', 14);
+    const configured = config.get<number>('lineHeight', 0);
+    return configured === 0 ? Math.round(size * 1.5) : configured < 8 ? Math.round(configured * size) : configured;
+  }
+
+  private async content(block: PreviewBlock, document: vscode.TextDocument): Promise<{ html: string; size?: ImageSize; scalable: boolean }> {
+    const plain = (html: string) => ({ html, scalable: false });
+    if (block.kind === 'table') return plain(renderTable(block.table));
     const target = resolveImageTarget(block.url, document.uri);
     const roots = this.resourceRoots(document);
     const allowed = target?.scheme === 'file' && roots.some(root => target.path.startsWith(`${root.path.replace(/\/$/, '')}/`));
-    if (!target || !allowed) return '<p>Only local workspace images are rendered in this prototype. Edit source to inspect the image link.</p>';
+    if (!target || !allowed) return plain('<p>Only local workspace images are rendered in this prototype. Edit source to inspect the image link.</p>');
     try {
       const stat = await vscode.workspace.fs.stat(target);
-      if (stat.size > 8 * 1024 * 1024) return '<p>Image exceeds the prototype limit of 8 MB. Edit source to open it separately.</p>';
+      if (stat.size > 8 * 1024 * 1024) return plain('<p>Image exceeds the prototype limit of 8 MB. Edit source to open it separately.</p>');
       const types: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml' };
       const type = types[target.path.split('.').pop()?.toLowerCase() ?? ''];
-      if (!type) return '<p>This image format is not supported in the prototype.</p>';
+      if (!type) return plain('<p>This image format is not supported in the prototype.</p>');
       const bytes = await vscode.workspace.fs.readFile(target);
       const source = `data:${type};base64,${Buffer.from(bytes).toString('base64')}`;
-      return `<figure><img src="${source}" alt="${escapeHtml(block.alt)}"><figcaption>${escapeHtml(block.alt)}</figcaption></figure>`;
+      const scalable = type === 'image/svg+xml';
+      const html = `<figure><img${scalable ? ' class="fill"' : ''} src="${source}" alt="${escapeHtml(block.alt)}"><figcaption>${escapeHtml(block.alt)}</figcaption></figure>`;
+      return { html, size: imageDimensions(bytes, type), scalable };
     } catch {
-      return '<p class="error">Image could not be loaded. Edit source to check the path.</p>';
+      return plain('<p class="error">Image could not be loaded. Edit source to check the path.</p>');
     }
   }
 
