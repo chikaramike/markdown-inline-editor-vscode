@@ -6,7 +6,7 @@ import { isSupportedMarkdownLanguage, FILE_BACKED_MARKDOWN_SELECTOR } from '../l
 import { resolveImageTarget } from '../link-targets';
 import type { MarkdownParseCache, ParseEntry } from '../markdown-parse-cache';
 import { renderBlockHtml } from './html';
-import { escapeHtml, extractPreviewBlocks, imageDimensions, imageInsetLines, measuredInsetLines, renderTable, type ImageSize, type PreviewBlock } from './model';
+import { escapeHtml, extractPreviewBlocks, imageDimensions, imageInsetLines, isFoldExposed, measuredInsetLines, renderTable, type ImageSize, type PreviewBlock } from './model';
 
 type Preview = {
   block: PreviewBlock;
@@ -54,6 +54,11 @@ export class BlockPreviewController implements vscode.Disposable {
       }),
       vscode.window.onDidChangeVisibleTextEditors(() => this.refresh()),
       vscode.window.onDidChangeTextEditorSelection(() => this.refresh()),
+      vscode.window.onDidChangeTextEditorVisibleRanges(event => {
+        // A fold can silently fail (focus elsewhere, file reloaded from disk) while
+        // the table is still recorded as folded. Re-fold when its source shows.
+        if (event.textEditor === this.editor && this.staleFoldedTables(event.textEditor).length) this.refresh();
+      }),
       vscode.workspace.onDidChangeTextDocument(event => {
         if (event.document === this.editor?.document) {
           this.clearInsets();
@@ -163,7 +168,10 @@ export class BlockPreviewController implements vscode.Disposable {
       wanted.add(key);
       if (block.kind === 'table') {
         renderedTables.push(block);
-        if (!this.foldedLines.has(block.startLine)) toFold.push(block.startLine);
+        if (!this.foldedLines.has(block.startLine) || isFoldExposed(editor.visibleRanges.map(r => ({ start: r.start.line, end: r.end.line })), block.startLine, block.endLine)) {
+          this.foldedLines.delete(block.startLine);
+          toFold.push(block.startLine);
+        }
         summaries.push({
           range: editor.document.lineAt(block.startLine).range,
           renderOptions: { before: {
@@ -286,6 +294,13 @@ export class BlockPreviewController implements vscode.Disposable {
     } catch {
       return plain('<p class="error">Image could not be loaded. Edit source to check the path.</p>');
     }
+  }
+
+  /** Tables recorded as folded whose body lines are nevertheless visible. */
+  private staleFoldedTables(editor: vscode.TextEditor): PreviewBlock[] {
+    if (!this.foldedLines.size) return [];
+    const ranges = editor.visibleRanges.map(r => ({ start: r.start.line, end: r.end.line }));
+    return this.blocks(editor.document).filter(b => b.kind === 'table' && this.foldedLines.has(b.startLine) && isFoldExposed(ranges, b.startLine, b.endLine));
   }
 
   private clearInsets(): void {

@@ -265,6 +265,7 @@ export const window = {
   showTextDocument: vi.fn(async (document: MockTextDocument) => new MockTextEditor(document, [])),
   onDidChangeActiveTextEditor: () => ({ dispose: () => {} }),
   onDidChangeTextEditorSelection: () => ({ dispose: () => {} }),
+  onDidChangeTextEditorVisibleRanges: () => ({ dispose: () => {} }),
   onDidChangeActiveColorTheme: () => ({ dispose: () => {} }),
 };
 

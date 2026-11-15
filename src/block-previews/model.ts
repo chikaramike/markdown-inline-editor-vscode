@@ -142,3 +142,13 @@ export function measuredInsetLines(pixels: unknown, lineHeight: number): number 
   if (typeof pixels !== 'number' || !Number.isFinite(pixels) || pixels <= 0) return undefined;
   return Math.max(3, Math.min(48, Math.ceil(pixels / Math.max(8, lineHeight)) + 1));
 }
+
+/**
+ * True when the editor is showing a table's body lines although its source should be
+ * folded. A folded range hides lines startLine+1..endLine, so any visible range that
+ * covers one of them means the fold never applied or was undone by a reload.
+ */
+export function isFoldExposed(visibleRanges: readonly { start: number; end: number }[], startLine: number, endLine: number): boolean {
+  if (endLine <= startLine) return false;
+  return visibleRanges.some(range => range.start <= endLine && range.end >= startLine + 1);
+}

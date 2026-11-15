@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MarkdownParser } from '../../parser';
-import { extractPreviewBlocks, imageDimensions, imageInsetLines, measuredInsetLines, renderTable, DEFAULT_IMAGE_LINES } from '../model';
+import { extractPreviewBlocks, imageDimensions, imageInsetLines, isFoldExposed, measuredInsetLines, renderTable, DEFAULT_IMAGE_LINES } from '../model';
 import { renderBlockHtml } from '../html';
 
 function blocks(text: string) {
@@ -99,5 +99,21 @@ describe('block preview content', () => {
     expect(imageInsetLines({ width: 400, height: 200 }, 900, 21, false)).toBe(Math.ceil(304 / 21) + 1);
     expect(imageInsetLines(undefined, 900, 21, true)).toBe(DEFAULT_IMAGE_LINES);
     expect(imageInsetLines({ width: 100, height: 5000 }, 900, 21, true)).toBe(60);
+  });
+});
+
+describe('isFoldExposed', () => {
+  it('is false when the folded body lines are hidden between visible ranges', () => {
+    expect(isFoldExposed([{ start: 0, end: 10 }, { start: 15, end: 40 }], 10, 14)).toBe(false);
+  });
+
+  it('is true when a visible range shows the table body', () => {
+    expect(isFoldExposed([{ start: 0, end: 40 }], 10, 14)).toBe(true);
+    expect(isFoldExposed([{ start: 12, end: 40 }], 10, 14)).toBe(true);
+  });
+
+  it('is false when the table is scrolled out of view or has no body', () => {
+    expect(isFoldExposed([{ start: 20, end: 40 }], 10, 14)).toBe(false);
+    expect(isFoldExposed([{ start: 0, end: 40 }], 10, 10)).toBe(false);
   });
 });
